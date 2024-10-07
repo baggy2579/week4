@@ -9,6 +9,7 @@ output: html_document
 # Load necessary libraries
 library(readxl)
 library(fpp2)
+library(ggplot2)
 
 # Load the dataset and use the first row as column names
 Job_Openings_and_Labor_Turnover_Survey <- read_excel("C:/Users/Alfaz Khan/OneDrive/Desktop/Week 3/Job Openings and Labor Turnover Survey.xlsx", col_names = TRUE)
@@ -17,105 +18,111 @@ Job_Openings_and_Labor_Turnover_Survey <- read_excel("C:/Users/Alfaz Khan/OneDri
 ts_data <- ts(Job_Openings_and_Labor_Turnover_Survey$Jan, start=c(2014, 1), frequency=12)
 
 # Plot the time series
-plot(ts_data, main="Time Series of Job Openings (January)", ylab="Job Openings", xlab="Year")
+autoplot(ts_data, main="Time Series of Job Openings (January)", ylab="Job Openings", xlab="Year")
 
 # Mean Forecast
 mean_forecast <- meanf(ts_data, 5)
-plot(mean_forecast, main="Mean Forecast", ylab="Job Openings")
+autoplot(mean_forecast, main="Mean Forecast", ylab="Job Openings")
 
 # Naive Forecast
 naive_forecast <- naive(ts_data, 5)
-plot(naive_forecast, main="Naive Forecast", col="red")
+autoplot(naive_forecast, main="Naive Forecast", ylab="Job Openings")
 
 # Random Walk Forecast with and without drift
 rwf_forecast <- rwf(ts_data, 5)
-plot(rwf_forecast, main="Random Walk Forecast", col="green")
+autoplot(rwf_forecast, main="Random Walk Forecast")
 
 rwf_forecast_drift <- rwf(ts_data, 5, drift=TRUE)
-plot(rwf_forecast_drift, main="Random Walk Forecast with Drift", col="blue")
+autoplot(rwf_forecast_drift, main="Random Walk Forecast with Drift")
 
 # Seasonal Naive Forecast
-if (length(ts_data) < 12) {
-  warning("Time series is too short to apply a seasonal naive model.")
-} else {
+if (length(ts_data) >= 12) {
   snaive_forecast <- snaive(ts_data, 5)
-  plot(snaive_forecast, main="Seasonal Naive Forecast", col="black")
+  autoplot(snaive_forecast, main="Seasonal Naive Forecast")
 }
 
 # Moving Averages
 MA5_forecast <- ma(ts_data, order=5)
 MA9_forecast <- ma(ts_data, order=9)
 
-# Plot all forecasts on a single chart
-plot(ts_data, main="Forecast Comparison", ylab="Job Openings")
-lines(mean_forecast$mean, col="purple")
-lines(naive_forecast$mean, col="red")
-lines(rwf_forecast$mean, col="green")
-lines(rwf_forecast_drift$mean, col="blue")
-if (exists("snaive_forecast")) lines(snaive_forecast$mean, col="black")
-lines(MA5_forecast, col="pink")
-lines(MA9_forecast, col="orange")
+# Plot all forecasts on a single chart without colors yet
+p <- autoplot(ts_data, main="Forecast Comparison", ylab="Job Openings") +
+  autolayer(mean_forecast$mean, series="Mean") +
+  autolayer(naive_forecast$mean, series="Naive") +
+  autolayer(rwf_forecast$mean, series="Random Walk") +
+  autolayer(rwf_forecast_drift$mean, series="RW with Drift") +
+  if (exists("snaive_forecast")) autolayer(snaive_forecast$mean, series="Seasonal Naive") +
+  autolayer(MA5_forecast, series="MA5") +
+  autolayer(MA9_forecast, series="MA9")
 
-# Decomposition and Holt-Winters Forecast
-if (length(ts_data) < 24) {
-  warning("Time series is too short to apply decomposition or Holt-Winters method.")
-} else {
-  # Decomposition
-  ets_forecast <- ets(ts_data)
-  plot(ets_forecast)
+# Now, use scale_color_manual to add custom colors
+p + scale_color_manual(values=c("black", "purple", "red", "green", "blue", "pink", "orange"))
 
-  # Holt-Winters Forecast
+# ETS (Exponential Smoothing State Space Model)
+ets_model <- ets(ts_data)
+ets_forecast <- forecast(ets_model, h=5)
+autoplot(ets_forecast, main="ETS Forecast for Job Openings")
+
+# Check the length of the time series before applying Holt-Winters
+if (length(ts_data) >= 24) {
+  # Holt-Winters Model with full seasonality and trend
   HW_forecast <- HoltWinters(ts_data)
-  plot(HW_forecast, main="Holt-Winters Forecast")
+  autoplot(forecast(HW_forecast, h=5), main="Holt-Winters Fitted Model")
+} else {
+  warning("Time series is too short for Holt-Winters decomposition. Skipping Holt-Winters.")
 }
 
-# Calculate accuracy for the mean forecast
-accuracy_mean <- accuracy(mean_forecast)
-print(accuracy_mean)
+# Simple Exponential Smoothing without trend and seasonality
+SSE_Simple <- HoltWinters(ts_data, beta=FALSE, gamma=FALSE)
+plot(SSE_Simple, main="Simple Exponential Smoothing")
 
-# Calculate accuracy for naive forecast
-accuracy_naive <- accuracy(naive_forecast)
-print(accuracy_naive)
+# Check SSE (Sum of Squared Errors)
+SSE_Simple$SSE
 
-# Calculate accuracy for random walk forecast
-accuracy_rwf <- accuracy(rwf_forecast)
-print(accuracy_rwf)
+# Forecast using ETS model
+forecast_ets_1 <- forecast(ets_model, h=5)
+autoplot(forecast_ets_1, main="ETS Model Forecast")
 
-# If seasonal naive forecast exists, calculate accuracy
+### Model Comparison based on Accuracy
+
+# Accuracy for Mean Forecast
+acc_mean <- accuracy(mean_forecast)
+
+# Accuracy for Naive Forecast
+acc_naive <- accuracy(naive_forecast)
+
+# Accuracy for Random Walk Forecast
+acc_rwf <- accuracy(rwf_forecast)
+
+# Accuracy for Random Walk Forecast with Drift
+acc_rwf_drift <- accuracy(rwf_forecast_drift)
+
+# Accuracy for Seasonal Naive Forecast
 if (exists("snaive_forecast")) {
-  accuracy_snaive <- accuracy(snaive_forecast)
-  print(accuracy_snaive)
+  acc_snaive <- accuracy(snaive_forecast)
 }
 
-# Handle single or multiple rows in accuracy output
-if (nrow(accuracy_mean) == 1) {
-  mae_mean <- accuracy_mean[1, "MAE"]
-  rmse_mean <- accuracy_mean[1, "RMSE"]
-} else {
-  mae_mean <- accuracy_mean[2, "MAE"]
-  rmse_mean <- accuracy_mean[2, "RMSE"]
+# Accuracy for ETS model
+acc_ets <- accuracy(ets_forecast)
+
+# Accuracy for Holt-Winters model (only if applied)
+if (length(ts_data) >= 24) {
+  acc_hw <- accuracy(forecast(HW_forecast, h=5))
 }
 
-if (nrow(accuracy_naive) == 1) {
-  mae_naive <- accuracy_naive[1, "MAE"]
-  rmse_naive <- accuracy_naive[1, "RMSE"]
-} else {
-  mae_naive <- accuracy_naive[2, "MAE"]
-  rmse_naive <- accuracy_naive[2, "RMSE"]
-}
-
-# Compare accuracy and decide the best model
-accuracy_table <- data.frame(
-  Model = c("Mean", "Naive", "Random Walk", "Seasonal Naive"),
-  MAE = c(mae_mean, mae_naive, accuracy_rwf[1, "MAE"], ifelse(exists("accuracy_snaive"), accuracy_snaive[1, "MAE"], NA)),
-  RMSE = c(rmse_mean, rmse_naive, accuracy_rwf[1, "RMSE"], ifelse(exists("accuracy_snaive"), accuracy_snaive[1, "RMSE"], NA))
+# Extract the RMSE values from the first row (training set)
+rmse_values <- data.frame(
+  Model = c("Mean", "Naive", "Random Walk", "RW with Drift", ifelse(exists("acc_snaive"), "Seasonal Naive", NA), "ETS", ifelse(length(ts_data) >= 24, "Holt-Winters", NA)),
+  RMSE = c(acc_mean[1, "RMSE"], acc_naive[1, "RMSE"], acc_rwf[1, "RMSE"], acc_rwf_drift[1, "RMSE"],
+           ifelse(exists("acc_snaive"), acc_snaive[1, "RMSE"], NA), acc_ets[1, "RMSE"], ifelse(length(ts_data) >= 24, acc_hw[1, "RMSE"], NA))
 )
 
-# Display accuracy table
-accuracy_table
+# Remove any NA rows from the RMSE table
+rmse_values <- na.omit(rmse_values)
 
-# Forecast with ETS model if it exists
-if (exists("ets_forecast")) {
-  forecast_ets <- forecast(ets_forecast, h=5)
-  plot(forecast_ets, main="ETS Forecast", ylab="Job Openings", xlab="Year")
-}
+# Print the RMSE values
+print(rmse_values)
+
+# Identify the best model based on RMSE
+best_model <- rmse_values[which.min(rmse_values$RMSE), ]
+print(paste("The best model based on RMSE is:", best_model$Model))
