@@ -1,0 +1,121 @@
+---
+title: "week4"
+author: "Alfazkhan"
+date: "2024-10-05"
+output: html_document
+---
+
+```{r}
+# Load necessary libraries
+library(readxl)
+library(fpp2)
+
+# Load the dataset and use the first row as column names
+Job_Openings_and_Labor_Turnover_Survey <- read_excel("C:/Users/Alfaz Khan/OneDrive/Desktop/Week 3/Job Openings and Labor Turnover Survey.xlsx", col_names = TRUE)
+
+# Create a time series for a specific column (e.g., January)
+ts_data <- ts(Job_Openings_and_Labor_Turnover_Survey$Jan, start=c(2014, 1), frequency=12)
+
+# Plot the time series
+plot(ts_data, main="Time Series of Job Openings (January)", ylab="Job Openings", xlab="Year")
+
+# Mean Forecast
+mean_forecast <- meanf(ts_data, 5)
+plot(mean_forecast, main="Mean Forecast", ylab="Job Openings")
+
+# Naive Forecast
+naive_forecast <- naive(ts_data, 5)
+plot(naive_forecast, main="Naive Forecast", col="red")
+
+# Random Walk Forecast with and without drift
+rwf_forecast <- rwf(ts_data, 5)
+plot(rwf_forecast, main="Random Walk Forecast", col="green")
+
+rwf_forecast_drift <- rwf(ts_data, 5, drift=TRUE)
+plot(rwf_forecast_drift, main="Random Walk Forecast with Drift", col="blue")
+
+# Seasonal Naive Forecast
+if (length(ts_data) < 12) {
+  warning("Time series is too short to apply a seasonal naive model.")
+} else {
+  snaive_forecast <- snaive(ts_data, 5)
+  plot(snaive_forecast, main="Seasonal Naive Forecast", col="black")
+}
+
+# Moving Averages
+MA5_forecast <- ma(ts_data, order=5)
+MA9_forecast <- ma(ts_data, order=9)
+
+# Plot all forecasts on a single chart
+plot(ts_data, main="Forecast Comparison", ylab="Job Openings")
+lines(mean_forecast$mean, col="purple")
+lines(naive_forecast$mean, col="red")
+lines(rwf_forecast$mean, col="green")
+lines(rwf_forecast_drift$mean, col="blue")
+if (exists("snaive_forecast")) lines(snaive_forecast$mean, col="black")
+lines(MA5_forecast, col="pink")
+lines(MA9_forecast, col="orange")
+
+# Decomposition and Holt-Winters Forecast
+if (length(ts_data) < 24) {
+  warning("Time series is too short to apply decomposition or Holt-Winters method.")
+} else {
+  # Decomposition
+  ets_forecast <- ets(ts_data)
+  plot(ets_forecast)
+
+  # Holt-Winters Forecast
+  HW_forecast <- HoltWinters(ts_data)
+  plot(HW_forecast, main="Holt-Winters Forecast")
+}
+
+# Calculate accuracy for the mean forecast
+accuracy_mean <- accuracy(mean_forecast)
+print(accuracy_mean)
+
+# Calculate accuracy for naive forecast
+accuracy_naive <- accuracy(naive_forecast)
+print(accuracy_naive)
+
+# Calculate accuracy for random walk forecast
+accuracy_rwf <- accuracy(rwf_forecast)
+print(accuracy_rwf)
+
+# If seasonal naive forecast exists, calculate accuracy
+if (exists("snaive_forecast")) {
+  accuracy_snaive <- accuracy(snaive_forecast)
+  print(accuracy_snaive)
+}
+
+# Handle single or multiple rows in accuracy output
+if (nrow(accuracy_mean) == 1) {
+  mae_mean <- accuracy_mean[1, "MAE"]
+  rmse_mean <- accuracy_mean[1, "RMSE"]
+} else {
+  mae_mean <- accuracy_mean[2, "MAE"]
+  rmse_mean <- accuracy_mean[2, "RMSE"]
+}
+
+if (nrow(accuracy_naive) == 1) {
+  mae_naive <- accuracy_naive[1, "MAE"]
+  rmse_naive <- accuracy_naive[1, "RMSE"]
+} else {
+  mae_naive <- accuracy_naive[2, "MAE"]
+  rmse_naive <- accuracy_naive[2, "RMSE"]
+}
+
+# Compare accuracy and decide the best model
+accuracy_table <- data.frame(
+  Model = c("Mean", "Naive", "Random Walk", "Seasonal Naive"),
+  MAE = c(mae_mean, mae_naive, accuracy_rwf[1, "MAE"], ifelse(exists("accuracy_snaive"), accuracy_snaive[1, "MAE"], NA)),
+  RMSE = c(rmse_mean, rmse_naive, accuracy_rwf[1, "RMSE"], ifelse(exists("accuracy_snaive"), accuracy_snaive[1, "RMSE"], NA))
+)
+
+# Display accuracy table
+accuracy_table
+
+# Forecast with ETS model if it exists
+if (exists("ets_forecast")) {
+  forecast_ets <- forecast(ets_forecast, h=5)
+  plot(forecast_ets, main="ETS Forecast", ylab="Job Openings", xlab="Year")
+}
